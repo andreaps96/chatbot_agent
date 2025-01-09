@@ -191,3 +191,74 @@ def send_mail(partner_name,subject,body):
     except requests.exceptions.RequestException as e:
         print(f"Errore nella creazione del mailing: {str(e)}")
         return None
+    
+
+
+template_erp = """
+        Sei un assistente esperto nella gestione di dati per un sistema ERP. Il tuo compito è modificare dei record esistenti su un database Odoo. 
+        Rispondi alla {domanda} dell'utente esclusivamente con un JSON che includa:
+
+        1. **Modello** su cui operare (es. "calendar.event").
+        2. Un dizionario con i parametri dell'operazione, come specificato.
+        
+        Regole importanti:
+        - Se l'utente ti chiede un'operazione di modifica (metodo 'write') in una data **minore di {data_oggi}**, non devi eseguire l'operazione.
+            In questo caso, rispondi semplicemente con il testo **"Non posso modificare il passato"**.
+        - Se la data è corretta o valida (>= {data_oggi}), genera il JSON richiesto.
+        
+        Esempi:
+
+        
+        
+        Richiesta: "il numero di ore di oggi sul progetto X è pari a 2"
+        Output:
+        {{
+            "modello": "account.analytic.line",
+            "metodo": "write",
+            "dizionario": {{
+                "unit_amount": 2.0,      
+                "date": "2024-12-15",
+                "project_id": 'X',
+            }}
+        }}
+        
+
+        
+        NOTA BENE: nell'output non inserire mai una coppia chiave-valore relativa all'utente (uid o employee_id)
+        
+        NOTA BENE: se nell'input non vedi una data specifica, usa questa data corrente: {data_oggi}
+
+        Ora genera il JSON per questa richiesta:
+        domanda: {domanda}
+        data_oggi: {data_oggi}
+        id_ferie: {id_ferie}  
+    """
+
+
+def delete_record(modello,filtri):
+    
+
+
+
+
+
+    try:
+        # Effettua la richiesta per eliminare il record
+        url = f"{odoo_url}/web/dataset/call_kw/{modello}/unlink"
+        payload = {
+            "jsonrpc": "2.0",
+            "params": {
+                "model": modello,
+                "method": "unlink",
+                "args": [record_ids],
+                "kwargs": {}
+            }
+        }
+        response = session.post(url, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        #print(result)
+        return 'Record eliminato con successo'
+    
+    except Exception as e:
+        return f"Errore durante la cancellazione del record: {e}"

@@ -331,7 +331,7 @@ def operazione(modello,metodo,dizionario):
             else:
                 raise ValueError(f"Progetto '{project_name}' non trovato.")
         except Exception as e:
-            return 'Il progetto non esiste'
+            return 'Progetto non trovato'
         
         dizionario['project_id'] = project_id
         #caso del task
@@ -360,9 +360,8 @@ def operazione(modello,metodo,dizionario):
                 else:
                     raise ValueError(f"Task '{task_name}' non trovato nel progetto con ID {project_id}.")
             except Exception as e:
-                return 'Il task non esiste'
+                return 'Task non trovato'
             dizionario['task_id'] = task_id
-            #print(dizionario)
     
         url_employee = f"{odoo_url}/web/dataset/call_kw/hr.employee/search_read"
         # Filtro per cercare il dipendente associato a questo utente
@@ -381,8 +380,8 @@ def operazione(modello,metodo,dizionario):
         uid = employees[0]['id']
         chiave = 'employee_id'
     
-    # elif modello == 'account.move':
-    #         pass
+    elif modello == 'account.move':
+            return 'Operazione fallita'
     
     url = f"{odoo_url}/web/dataset/call_kw/{modello}/{metodo}"
     dizionario[chiave] = uid
@@ -402,12 +401,12 @@ def operazione(modello,metodo,dizionario):
 
         # Risultato della richiesta
         result = response.json()
-        return result
+        return 'Operazione eseguita con successo'
         
     except Exception as e:
         return f'Operazione fallita: {e}'
 
-#OPERAZIONI DI CREAZIONE SU ODOO 
+#OPERAZIONI DI CREAZIONE SU ODOO (OK)
 def operazione_ERP(input_text):
     """
     Funzione che gestisce le operazioni ERP basate sul testo in input.
@@ -550,15 +549,12 @@ def operazione_ERP(input_text):
             dizionario['task_id'] = find_task(dizionario['project_id'],dizionario['task_id'])
 
         result = operazione(modello, metodo, dizionario)
-        
-        if 'error' in result:
-            return 'Operazione fallita'
-        else:
-            return 'Operazione eseguita con successo'
+        return result
         
     except Exception as e:
         return f"Errore nell'esecuzione dell'operazione: {str(e)}"
     
+#print(operazione_ERP("aggiungi un'ora al foglio ore di oggi al progetto AGILE - JAVA"))
 
 def delete_record(modello,filtri):
     uid,session = autenticazione()
@@ -702,9 +698,158 @@ def eliminazione_ERP(input_text):
     delete_record(dict['modello'],dict['filtri'])
     return dict
 
+
+def modify_record(modello, filtri,dizionario):
+    uid, session = autenticazione()
+    
+    # Ricerca degli ID dei record
+    url_search = f"{odoo_url}/web/dataset/call_kw/{modello}/search_read"
+    
+    # Aggiungi user_id ai filtri, se necessario
+    filtri.append(["user_id", "=", uid])
+    
+    payload_search = {
+        "jsonrpc": "2.0",
+        "params": {
+            "model": modello,
+            "method": "search_read",
+            "args": [filtri],
+            "kwargs": {
+                "fields": ["id"],
+                "limit": 1  # Restituisce almeno un record
+            }
+        }
+    }
+    
+    try:
+        response_search = session.post(url_search, json=payload_search)
+        response_search.raise_for_status()
+        results = response_search.json().get('result', [])
+        
+        # Verifica se ci sono risultati
+        if results:
+            record_ids = [record['id'] for record in results]
+            print(record_ids)
+        else:
+            return "Nessun record trovato con i filtri forniti"
+
+    except Exception as e:
+        return f"Errore durante la ricerca degli ID: {e}"
+    
+    url = f"{odoo_url}/web/dataset/call_kw/{modello}/write"
+    payload = {
+        "jsonrpc": "2.0",
+        "params": {
+            "model": modello,
+            "method": "write",
+            "args": [record_ids],
+            "kwargs": dizionario
+        }
+    }
+    try:
+        response = session.post(url, json=payload)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("error"):
+            return f"Errore durante la modifica del record: {result['error']}"
+        else:
+            return "Operazione riuscita!"
+        
+    except Exception as e:
+        return f"Errore durante la modifica del record: {e}"
+   
+def modifica_ERP(input_text):
+    """
+    Funzione che gestisce le operazioni ERP basate sul testo in input.
+    """
+    # Template per il prompt
+    template_modifica = PromptTemplate.from_template(
+    """ 
+        Sei un assistente addetto alla modifica di record su Odoo. Analizza la {domanda} dell'utente e capisci i record che vuole eliminare
+        
+        In output genera un dizionario contente i parametri necessari a trovare l'id del record da modificare e a registrare il nuovo record:
+        1. Il modello Odoo
+        2: i filtri (la chiave deve chiamarsi 'filtri' e deve rispettare la sintassi di ODOO) con cui filtrare lo specifico record da eliminare (non devono mai riguardare user_id o employee_id)
+        3: i campi, i campi necessarie per fornire i dati richiesti dall'utente. Nella costruzione dei campi rispondi esclusivamente alla {domanda}, non inserire campi non pertinenti. se per esempio viene richiesto solo un nome o una data, non inserire altro
+        
+        NOTA BENE: sii preciso nella costruzione dei filtri e sta attento ad adottare la sintassi di ODOO per poter eseguire la query
+        NOTA BENE:
+        - I filtri possono essere più di uno e devono essere inclusi in un array.
+        - L'output deve essere **unicamente** un JSON valido senza alcun testo aggiuntivo.
+        - NON usare apostrofi ('), usa sempre le virgolette doppie (").
+
+        ESEMPI:
+        Richiesta: "sposta il meeting col team vendite del 15 dicembre al 18 dicembre dalle 14 alle 15:30"
+        Output:
+        {{
+            "modello": "calendar.event",
+            "metodo": "write",
+            "filtri": [
+                ["start", ">=", "2024-12-02 00:00:00"],
+                ["stop", "<=", "2024-12-02 23:59:59"]
+            ],
+            "dizionario": {{
+                "start_datetime": "2024-12-18 14:00:00",
+                "stop_datetime": "2024-12-18 15:30:00",
+            }}
+        }}
+        
+        Richiesta: "Sposta la richiesta di ferie del 7 gennaio al 9 gennaio."
+        Output:
+        {{
+            "modello": "hr.leave",
+            "metodo": "write",
+            "filtri": [
+                ["request_date_from", "=", "2024-01-07"],
+                ["holiday_status_id", "=", 1],
+            ],
+            "dizionario": {{
+                "request_date_from": "2024-01-09 00:00:00",
+                "request_date_to": "2024-01-09 23:59:59",
+            }}
+        }}
+        
+      
+        Richiesta: "il numero di ore di oggi sul progetto X è pari a 2"
+        Output:
+        {{
+            "modello": "account.analytic.line",
+            "metodo": "write",
+            "filtri": [
+                ["project_id.name", "=", "Progetto X"],
+                ["date", "=", "2024-12-15"]
+            ],
+            "dizionario": {{
+                "unit_amount": 2.0,      
+                "date": "2024-12-15",
+                "project_id": 'X',
+                "task_id":Y
+            }}
+        }}
+        
+        IMPORTANTE STRUTTURA OUTPUT: **l'output dovrà essere costituito unicamente dal dizionario, NON DEVI aggiungere altro testo**
+        
+        NOTA BENE: se nell'input non vedi una data specifica, usa questa data corrente: {data_oggi}. Sfrutta {data_oggi} per avere un contesto temporale
+
+        domanda:{domanda}
+        data_oggi:{data_oggi}
+    """)
+    
+    
+    # Data corrente formattata
+    formatted_time = datetime.now().strftime("%Y-%m-%d")
+    parser = JsonOutputParser()
+    chain_modify = template_modifica | llm | parser
+    dict = chain_modify.invoke({'domanda':input_text,'data_oggi':formatted_time}) 
+    result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
+    return result
+
+print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
+
+
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
 #print(invio_mail("andrea pastore","ciao","FNS"))
 #print(operazione_ERP("crea un evento in calendario per domani con nome prova"))
-#print(operazione_ERP("aggiungi un'ora al foglio ore di oggi al progetto odoo chatbot al task analisi"))
