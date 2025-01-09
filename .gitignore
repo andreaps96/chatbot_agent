@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.env
+.venv
+ENV/
+rieux/
+qr.png
+qr.ipynb
+
+
+# VS Code
+.vscode/
+.history
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
