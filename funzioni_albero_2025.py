@@ -550,6 +550,7 @@ def operazione_ERP(input_text):
             dizionario['task_id'] = find_task(dizionario['project_id'],dizionario['task_id'])
 
         result = operazione(modello, metodo, dizionario)
+        
         if 'error' in result:
             return 'Operazione fallita'
         else:
@@ -558,7 +559,6 @@ def operazione_ERP(input_text):
     except Exception as e:
         return f"Errore nell'esecuzione dell'operazione: {str(e)}"
     
-print(operazione_ERP("aggiungi un'ora al foglio ore di oggi al progetto odoo chatbot al task analisi"))
 
 def delete_record(modello,filtri):
     uid,session = autenticazione()
@@ -707,3 +707,4 @@ def eliminazione_ERP(input_text):
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
 #print(invio_mail("andrea pastore","ciao","FNS"))
 #print(operazione_ERP("crea un evento in calendario per domani con nome prova"))
+#print(operazione_ERP("aggiungi un'ora al foglio ore di oggi al progetto odoo chatbot al task analisi"))
