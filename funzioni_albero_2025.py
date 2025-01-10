@@ -729,7 +729,7 @@ def modify_record(modello, filtri,dizionario):
         # Verifica se ci sono risultati
         if results:
             record_ids = [record['id'] for record in results]
-            print(record_ids)
+            
         else:
             return "Nessun record trovato con i filtri forniti"
 
