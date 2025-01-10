@@ -742,9 +742,10 @@ def modify_record(modello, filtri,dizionario):
         "params": {
             "model": modello,
             "method": "write",
-            "args": [record_ids],
-            "kwargs": dizionario
-        }
+            "args": [record_ids,dizionario] ,
+            'kwargs':{}
+        },
+        
     }
     try:
         response = session.post(url, json=payload)
@@ -845,7 +846,7 @@ def modifica_ERP(input_text):
     result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
     return result
 
-print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
+#rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 
 
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
