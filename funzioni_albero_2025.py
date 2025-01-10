@@ -401,7 +401,10 @@ def operazione(modello,metodo,dizionario):
 
         # Risultato della richiesta
         result = response.json()
-        return 'Operazione eseguita con successo'
+        if result.get("error"):
+            return f"Errore durante la creazione del record: {result['error']}"
+        else:
+            return "Record creato con successo"
         
     except Exception as e:
         return f'Operazione fallita: {e}'
@@ -568,7 +571,7 @@ def delete_record(modello,filtri):
             "method": "search_read",
             "args": [filtri],
             "kwargs": {
-                "fields": ["id","name"],  # Restituisci solo l'ID
+                "fields": ["id"],  # Restituisci solo l'ID
                 "limit": 0           # Restituisci tutti i risultati corrispondenti
             }
         }
@@ -577,10 +580,11 @@ def delete_record(modello,filtri):
         response_search = session.post(url_search, json=payload_search)
         response_search.raise_for_status()
         results = response_search.json().get('result', [])
-        record_ids = [record['id'] for record in results]
-        #print(record_ids)
-        #record_ids = [{'id': record['id'], 'name': record['name']} for record in results]
-    
+        if results:
+                record_ids = [record['id'] for record in results] 
+        else:
+            return "Nessun record trovato con i filtri forniti"
+        
     except Exception as e:
         return f"Errore durante la ricerca degli ID: {e}"
         #provo cancellazione
@@ -599,8 +603,11 @@ def delete_record(modello,filtri):
         response = session.post(url, json=payload)
         response.raise_for_status()
         result = response.json()
-        #print(result)
-        return 'Record eliminato con successo'
+
+        if result.get("error"):
+            return f"Errore durante la cancellazione del record: {result['error']}"
+        else:
+            return "Record eliminato con successo"
     
     except Exception as e:
         return f"Errore durante la cancellazione del record: {e}"
@@ -618,9 +625,9 @@ def eliminazione_ERP(input_text):
         
         NOTA BENE: sii preciso nella costruzione dei filtri e sta attento ad adottare la sintassi di ODOO per poter eseguire la query
         NOTA BENE:
-        - I filtri possono essere più di uno e devono essere inclusi in un array.
-        - L'output deve essere **unicamente** un JSON valido senza alcun testo aggiuntivo.
-        - NON usare apostrofi ('), usa sempre le virgolette doppie (").
+            - I filtri possono essere più di uno e devono essere inclusi in un array.
+            - L'output deve essere **unicamente** un JSON valido senza alcun testo aggiuntivo.
+            - NON usare apostrofi ('), usa sempre le virgolette doppie (").
 
         ESEMPI:
         Richiesta: "Elimina il meeting del team vendite del 2 dicembre."
@@ -684,6 +691,16 @@ def eliminazione_ERP(input_text):
                 ["request_date_from", "=", "2024-02-20"]
             ]
         }}
+
+        Richiesta: "Cancella le fatture del 7 gennaio 2025"
+        Output:
+        {{
+            "modello": "account.move",
+            "filtri": [
+                ["date","=","2025-01-07],
+                ["move_type","in",["out_invoice","in_invoice"]]
+            ]
+        }}
         
         IMPORTANTE STRUTTURA OUTPUT: **l'output dovrà essere costituito unicamente dal dizionario, NON DEVI aggiungere altro testo**
         
@@ -695,10 +712,10 @@ def eliminazione_ERP(input_text):
     parser = JsonOutputParser()
     chain_delete = template_eliminazione | llm | parser
     dict = chain_delete.invoke({'domanda':input_text,'data_oggi':formatted_time}) 
-    delete_record(dict['modello'],dict['filtri'])
-    return dict
+    result = delete_record(dict['modello'],dict['filtri'])
+    return result
 
-
+#print(eliminazione_ERP("cancella tutte le fatture del cliente Aloschi"))
 def modify_record(modello, filtri,dizionario):
     uid, session = autenticazione()
     
