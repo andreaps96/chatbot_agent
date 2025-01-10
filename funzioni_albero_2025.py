@@ -7,7 +7,8 @@ from langchain_core.output_parsers import JsonOutputParser
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 import pytz
-
+import pandas as pd
+import matplotlib.pyplot as plt
 
 load_dotenv()
 odoo_url = "https://dev-unitiva.odoo.com/"
@@ -65,8 +66,13 @@ id_ferie = {
 # Imposta il fuso orario (ad esempio 'Europe/Rome')
 timezone = pytz.timezone('Europe/Rome')
 
+
 # Ottieni la data e ora correnti
 current_time = datetime.now(timezone)
+
+#ottieni l'anno
+anno_attuale = current_time.year
+
 
 # Formatta la data nel formato richiesto
 formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
@@ -970,9 +976,8 @@ def lettura_ERP(input_text):
         CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
         
         **SUGGERIMENTO: se l'utente richiede quali sono i progetti entra nel modulo account.analytic.line anziché nel modulo project.task**
-        **suggerimento: se l'utente richiede i task associati a un progetto di cui hai parlato prima cerca nella risposta precedente ({chat_history}) l'id del progetto (project_id) per creare il json**
         
-        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno 2025):
+        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno {anno_attuale}):
         segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
         Fornisci una risposta con i parametri nei seguenti formati:
         
@@ -1049,13 +1054,43 @@ def lettura_ERP(input_text):
             
             domdanda:{domanda}
             data_oggi:{data_oggi}
+            anno_attuale:{anno_attuale}
     """)
-    chain_lettura = template_lettura | llm
-    risposta = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time})
+    parser = JsonOutputParser()
+    chain_lettura = template_lettura | llm | parser
+    risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time, 'anno_attuale':anno_attuale})
+    try:
+        if 'nome progetto' in risultato:
+            filtro_progetto = [["name", "=", risultato['nome progetto']]]
+            campi_progetto = ["id", "name"]
+            progetto = read_record("project.project", filtro=filtro_progetto, campi=campi_progetto, flag=True)
+            if progetto:
+                progetto_id = progetto[0]["id"]
+            else:
+                print("Progetto non trovato")
+                progetto_id = None  # Imposta a None se il progetto non viene trovato
+        else:
+            progetto_id = None
+        # Crea il filtro per il progetto
+        filtro_progetto = [["project_id", "=", progetto_id]] if progetto_id else []
+        # Aggiungi eventuali filtri presenti in 'risultato' e crea il filtro finale
+        filtri = risultato.get('filtri', [])
+        filtro_completo = filtri + filtro_progetto
+        output = read_record(risultato['modello'], filtro=filtro_completo, campi=risultato['campi'])
+        df = pd.DataFrame(data=output)
+        df = df.to_string(index=False)
+        return df
+    except Exception as e:
+        return e
+
+print(lettura_ERP("Dimmi gli eventi in calendario che ho oggi"))
+
+
+
             
 
 
-#rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
+#print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
