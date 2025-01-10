@@ -791,8 +791,8 @@ def modifica_ERP(input_text):
                 ["stop", "<=", "2024-12-02 23:59:59"]
             ],
             "dizionario": {{
-                "start_datetime": "2024-12-18 14:00:00",
-                "stop_datetime": "2024-12-18 15:30:00",
+                "start": "2024-12-18 14:00:00",
+                "stop": "2024-12-18 15:30:00",
             }}
         }}
         
@@ -846,9 +846,8 @@ def modifica_ERP(input_text):
     result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
     return result
 
+
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
-
-
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
