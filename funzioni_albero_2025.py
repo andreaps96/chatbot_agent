@@ -4,10 +4,11 @@ from dotenv import load_dotenv
 from fuzzywuzzy import process
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from datetime import datetime
 from langchain_openai import ChatOpenAI
+from datetime import datetime
 import pytz
 import pandas as pd
+
 
 
 load_dotenv()
@@ -43,7 +44,8 @@ modelli_con_uid = [
     "res.partner",       # Partner e contatti collegati all'utente
     "crm.lead",          # Opportunità di vendita (CRM)
     "helpdesk.ticket",  # Ticket di supporto assegnati
-    'project.project'
+    'project.project',
+    'project.task'
 ]
 
 id_ferie = {
@@ -867,36 +869,9 @@ def modifica_ERP(input_text):
     result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
     return result,dict
 
-def read_record(modello, filtro=None, campi=None,flag=False):
-    """
-    Legge i record da Odoo restituendo solo le informazioni richieste.
-    Args:
-        modello (str): Il modello da cui leggere i record (es. 'hr.leave', 'account.analytic.line').
-        filtro (list): Una lista di tuple per filtrare i record (es. [["user_id", "=", 1]]).
-        campi (list): Una lista di stringhe con i nomi dei campi da restituire (es. ["id", "name"]).
-    Returns:
-        list: Lista di dizionari con i dati richiesti oppure un messaggio di errore.
-    """
-    # URL di autenticazione
-    url_auth = f"{odoo_url}/web/session/authenticate"
-    payload_auth = {
-        "jsonrpc": "2.0",
-        "params": {
-            "db": db,
-            "login": username,
-            "password": pw
-        }
-    }
-    session = requests.Session()
-    # Autenticazione
-    response_auth = session.post(url_auth, json=payload_auth)
-    response_auth.raise_for_status()
-    result_auth = response_auth.json()
-    try:
-        uid = result_auth['result']['uid']
-    except KeyError:
-        return {"error": "Autenticazione fallita"}
-    # Ottieni l'employee_id dall'uid
+def read_record(modello,filtro=None,campi=None,flag=None):
+    uid,session = autenticazione()
+     # Ottieni l'employee_id dall'uid
     url_employee = f"{odoo_url}/web/dataset/call_kw/hr.employee/search_read"
     payload_employee = {
         "jsonrpc": "2.0",
@@ -914,21 +889,22 @@ def read_record(modello, filtro=None, campi=None,flag=False):
         if not employee_data:
             return {"error": "Dipendente non trovato per l'utente"}
         employee_id = employee_data[0]["id"]  # Prendi l'employee_id
+
     except Exception as e:
         return {"error": f"Errore nella lettura dell'employee_id: {e}"}
-    # URL per leggere i dati
-    url_read = f"{odoo_url}/web/dataset/call_kw/{modello}/search_read"
-    # aggiungo uid o employee_id
+    
+       # aggiungo uid o employee_id
     if filtro is None:
         filtro = []
-    if modello in modelli_con_uid and flag == False:
+    if modello in modelli_con_uid:
         filtro.append(["user_id", "=", uid])
-    elif modello in modelli_con_employee_id and flag == False:
+    elif modello in modelli_con_employee_id:
         filtro.append(["employee_id", "=", employee_id])
-    #print(f'filtro: {filtro}')
-    # Gestiamo i campi: se non forniti, restituiamo tutti i campi
+
     if campi is None:
-        campi = []  # Se campi è None, restituiamo tutti i campi
+        campi = []
+
+    url_read = f"{odoo_url}/web/dataset/call_kw/{modello}/search_read"
     # Payload per la richiesta
     payload_read = {
         "jsonrpc": "2.0",
@@ -941,7 +917,7 @@ def read_record(modello, filtro=None, campi=None,flag=False):
         },
         "id":1
     }
-    #print(payload_read)
+    print(payload_read)
     try:
         # Effettua la richiesta
         response_read = session.post(url_read, json=payload_read)
@@ -951,30 +927,41 @@ def read_record(modello, filtro=None, campi=None,flag=False):
         # Filtro finale sui campi (ridondante ma garantisce pulizia)
         if campi:
             result_read = [{campo: record.get(campo) for campo in campi} for record in result_read]
+
         return result_read
+    
     except Exception as e:
         return {"error": f"Errore nella lettura dei record: {e}"}
-def lettura_ERP(input_text):
+
+def read_ERP(input_text):
     template_lettura = PromptTemplate.from_template(
-    """
-        Sei un assistente virtuale che
-        Genera un dizionario contenente i parametri da passare alla funzione 'leggi_record'. I parametri dovrebbero includere:
-        1. Il modello Odoo (ad esempio: 'calendar.event', 'hr.leave', etc.).
-        2. I campi richiesti (una lista di stringhe con i nomi dei campi da restituire, come 'id', 'name', etc.).
-        **La costruzione dei campi è fondamentale, devi inserire esclusivamente i campi essenziali a rispondere alla {domanda} dell'utente, senza inserire dati superflui**
-        per capire i campi necessari per rispondere alla domanda, analizza le componenti della {domanda} e usa solo i campi necessari
-        NOTA BENE: se viene rifatta una richiesta riguardante uno specifico progetto non creare il campo 'filtri' ma aggiungi un campo 'nome progetto'
-        STRUTTURA OUTPUT: *nell'output devi restituire ESCLUSIVAMENTE il dizionario richiesto, non aggiungere altro testo o caratteri*
-        CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
-        **SUGGERIMENTO: se l'utente richiede quali sono i progetti entra nel modulo account.analytic.line anziché nel modulo project.task**
-        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno {anno_attuale}):
-        segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
-        Fornisci una risposta con i parametri nei seguenti formati:
-        In base alla {domanda} crea un filtro e aggiungilo (si dovra chiamare 'filtri') al dizionario di output (in questo caso usa una lista di liste)
-        NOTA BENE: **non creare mai filtri relativi all'employee_id,user_id,uid**
-        NOTA BENE: quando costruisci i filtri adotta la sintassi corretta di ODOO, per esempio non esiste refused ma refuse
-        segui attentamente i seguenti esempi:
-        ESEMPI
+        """ 
+            sei un assistente virtuale addetto alla lettura di record su un db odoo.
+
+             Genera un dizionario contenente i parametri da passare alla funzione 'read_record'. I parametri dovrebbero includere:
+            1. Il modello Odoo (ad esempio: 'calendar.event', 'hr.leave', etc.).
+            2. I campi richiesti (una lista di stringhe con i nomi dei campi da restituire, come 'id', 'name', etc.).
+
+            **La costruzione dei campi è fondamentale, devi inserire esclusivamente i campi essenziali a rispondere alla {domanda} dell'utente, senza inserire dati superflui**
+            per capire i campi necessari per rispondere alla domanda, analizza le componenti della {domanda} e usa solo i campi necessari
+
+            NOTA BENE: se viene rifatta una richiesta riguardante uno specifico progetto non creare il campo 'filtri' ma aggiungi un campo 'nome progetto'
+            
+            STRUTTURA OUTPUT: *nell'output devi restituire ESCLUSIVAMENTE il dizionario richiesto, non aggiungere altro testo o caratteri*
+            
+            CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
+            
+         
+            in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno {anno_attuale}):
+            segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
+            Fornisci una risposta con i parametri nei seguenti formati:
+
+            In base alla {domanda} crea un filtro e aggiungilo (si dovra chiamare 'filtri') al dizionario di output (in questo caso usa una lista di liste)
+            NOTA BENE: **non creare mai filtri relativi all'employee_id,user_id,uid**
+            NOTA BENE: quando costruisci i filtri adotta la sintassi corretta di ODOO, per esempio non esiste refused ma refuse
+            segui attentamente i seguenti esempi:
+
+            ESEMPI
             1. **Leggere gli eventi in calendario per l'utente**
             - Richiesta: "Voglio vedere gli eventi in calendario"
             - Parametri di input generati:
@@ -990,86 +977,51 @@ def lettura_ERP(input_text):
                     "campi": ["name", "date_from", "date_to"]
                     "filtri": inserisci i filtri che crei leggendo la {domanda}
                 }}
-            3. **Leggere il foglio ore per un progetto specifico**
-                - Richiesta: "Fammi vedere le ore lavorate sul progetto XYZ"
-                - Parametri di input generati:
-                {{
-                    "modello": "account.analytic.line",
-                    "campi": ["project_id", "unit_amount", "date"],
-                    "nome progetto":inserisci il nome del progetto
-                }}
-                - Richiesta: "leggi il foglio ore di un giorno"
-                - Parametri di input generati:
-                {{
-                    "modello": "account.analytic.line",
-                    "campi": ["project_id", "unit_amount", "date"],
-                    "nome progetto":inserisci il nome del progetto
-                }}
-            4. **dimmi i task associati al progetto X**
-                - Richiesta: "dimmi i task associati al progetto X"
-                - Parametri di input generati:
-                {{
-                    "modello": "project.task",
-                    "campi": ['id','name'],
-                    "nome progetto":inserisci il nome del progetto
-                }}
-            NOTA BENE: *in un caso come questo, non creare il campo 'filtri' ma sfrutta il campo 'nome progetto'*
-            5. **Leggere le presenze giornaliere per un dipendente**
+            3. **Leggere le presenze giornaliere per un dipendente**
                 - Richiesta: "Mostrami le presenze giornaliere per l'utente"
                 - Parametri di input generati:
             {{
                     "modello": "hr.attendance",
                     "campi": ["id", "check_in", "check_out", "employee_id"]
                 }}
-            7. **Leggere gli approvatori delle richieste di ferie**
-                - Richiesta: "Chi è l'approvatore della mia richiesta di ferie?"
+            4. **Leggere i progetti assegnati**
+                - Richiesta: "dimmi i progetti a cui sono assegnato"
+                - Parametri di input generati:
+            {{
+                    "modello": "project.project",
+                    "campi": ["name"],  
+                }}
+            5. **Leggere il foglio ore**
+                - Richiesta: "leggimi il foglio ore della settimana scorsa"
                 - Parametri di input generati:
                 {{
-                    "modello": "hr.leave",
-                    "campi": ["id", "name", "state"]
-                }}
-            8. **Visualizzare i progetti dell'utente**
-            -Richiesta: "dimmi i miei progetti"
-            - Parametri di input generati:
-                {{
                     "modello": "account.analytic.line",
-                    "campi": ["project_id"]
+                    "campi": ["project_id", "unit_amount", "date"],
+                    "filtri": inserisci i filtri che crei leggendo la {domanda}
                 }}
-            Ogni esempio restituisce un dizionario che rappresenta i parametri corretti da passare alla funzione `leggi_record`. Questi parametri vengono calcolati automaticamente in base alla richiesta dell'utente, e la funzione si occupa di fare il filtraggio in base all'utente autenticato.
-            NOTA BENE: se nell'input non vedi una data specifica, usa questa data corrente: {data_oggi}. Sfrutta {data_oggi} per avere un contesto temporale
+            
+
+
             domdanda:{domanda}
             data_oggi:{data_oggi}
             anno_attuale:{anno_attuale}
-    """)
-
-    parser = JsonOutputParser()
-    chain_lettura = template_lettura | llm | parser
-    risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time, 'anno_attuale':current_year})
+        """)
     try:
-        if 'nome progetto' in risultato:
-            filtro_progetto = [["name", "=", risultato['nome progetto']]]
-            campi_progetto = ["id", "name"]
-            progetto = read_record("project.project", filtro=filtro_progetto, campi=campi_progetto, flag=True)
-            if progetto:
-                progetto_id = progetto[0]["id"]
-            else:
-                print("Progetto non trovato")
-                progetto_id = None  # Imposta a None se il progetto non viene trovato
-        else:
-            progetto_id = None
-        # Crea il filtro per il progetto
-        filtro_progetto = [["project_id", "=", progetto_id]] if progetto_id else []
-        # Aggiungi eventuali filtri presenti in 'risultato' e crea il filtro finale
-        filtri = risultato.get('filtri', [])
-        filtro_completo = filtri + filtro_progetto
-        output = read_record(risultato['modello'], filtro=filtro_completo, campi=risultato['campi'])
+        chain_lettura = template_lettura | llm | JsonOutputParser()
+        risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time,'anno_attuale':current_year})
+        
+        filtri = risultato.get('filtri',[])
+        output = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
         df = pd.DataFrame(data=output)
         df = df.to_string(index=False)
+
         return df
     
     except Exception as e:
-        return f"Operazione di lettura fallita: {e}"
+        return f'Operazione di lettura fallita: {e}'
 
+#print(lettura_ERP('leggimi il foglio ore di questa settimana sul progetto odoo chatbot'))
+print(read_ERP("leggimi il foglio ore di questa settimana"))
 
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
