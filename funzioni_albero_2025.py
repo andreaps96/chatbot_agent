@@ -7,6 +7,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from datetime import datetime
 from langchain_openai import ChatOpenAI
 import pytz
+import pandas as pd
 
 
 load_dotenv()
@@ -70,6 +71,9 @@ current_time = datetime.now(timezone)
 
 # Formatta la data nel formato richiesto
 formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
+
+#anno corrent
+current_year = current_time.year
 
 #METODO PER EFFETTURA AUTENTICAZIONE SU ODOO (OK)
 def autenticazione():
@@ -875,7 +879,6 @@ def read_record(modello, filtro=None, campi=None,flag=False):
     """
     # URL di autenticazione
     url_auth = f"{odoo_url}/web/session/authenticate"
-
     payload_auth = {
         "jsonrpc": "2.0",
         "params": {
@@ -951,36 +954,25 @@ def read_record(modello, filtro=None, campi=None,flag=False):
         return result_read
     except Exception as e:
         return {"error": f"Errore nella lettura dei record: {e}"}
-
 def lettura_ERP(input_text):
     template_lettura = PromptTemplate.from_template(
     """
-        Sei un assistente virtuale che 
+        Sei un assistente virtuale che
         Genera un dizionario contenente i parametri da passare alla funzione 'leggi_record'. I parametri dovrebbero includere:
         1. Il modello Odoo (ad esempio: 'calendar.event', 'hr.leave', etc.).
         2. I campi richiesti (una lista di stringhe con i nomi dei campi da restituire, come 'id', 'name', etc.).
-
         **La costruzione dei campi è fondamentale, devi inserire esclusivamente i campi essenziali a rispondere alla {domanda} dell'utente, senza inserire dati superflui**
         per capire i campi necessari per rispondere alla domanda, analizza le componenti della {domanda} e usa solo i campi necessari
-        
         NOTA BENE: se viene rifatta una richiesta riguardante uno specifico progetto non creare il campo 'filtri' ma aggiungi un campo 'nome progetto'
-        
         STRUTTURA OUTPUT: *nell'output devi restituire ESCLUSIVAMENTE il dizionario richiesto, non aggiungere altro testo o caratteri*
-        
         CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
-        
         **SUGGERIMENTO: se l'utente richiede quali sono i progetti entra nel modulo account.analytic.line anziché nel modulo project.task**
-        **suggerimento: se l'utente richiede i task associati a un progetto di cui hai parlato prima cerca nella risposta precedente ({chat_history}) l'id del progetto (project_id) per creare il json**
-        
-        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno 2025):
+        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno {anno_attuale}):
         segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
         Fornisci una risposta con i parametri nei seguenti formati:
-        
         In base alla {domanda} crea un filtro e aggiungilo (si dovra chiamare 'filtri') al dizionario di output (in questo caso usa una lista di liste)
-        
         NOTA BENE: **non creare mai filtri relativi all'employee_id,user_id,uid**
         NOTA BENE: quando costruisci i filtri adotta la sintassi corretta di ODOO, per esempio non esiste refused ma refuse
-        
         segui attentamente i seguenti esempi:
         ESEMPI
             1. **Leggere gli eventi in calendario per l'utente**
@@ -1043,16 +1035,40 @@ def lettura_ERP(input_text):
                     "modello": "account.analytic.line",
                     "campi": ["project_id"]
                 }}
-
             Ogni esempio restituisce un dizionario che rappresenta i parametri corretti da passare alla funzione `leggi_record`. Questi parametri vengono calcolati automaticamente in base alla richiesta dell'utente, e la funzione si occupa di fare il filtraggio in base all'utente autenticato.
             NOTA BENE: se nell'input non vedi una data specifica, usa questa data corrente: {data_oggi}. Sfrutta {data_oggi} per avere un contesto temporale
-            
             domdanda:{domanda}
             data_oggi:{data_oggi}
+            anno_attuale:{anno_attuale}
     """)
-    chain_lettura = template_lettura | llm
-    risposta = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time})
-            
+
+    parser = JsonOutputParser()
+    chain_lettura = template_lettura | llm | parser
+    risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time, 'anno_attuale':current_year})
+    try:
+        if 'nome progetto' in risultato:
+            filtro_progetto = [["name", "=", risultato['nome progetto']]]
+            campi_progetto = ["id", "name"]
+            progetto = read_record("project.project", filtro=filtro_progetto, campi=campi_progetto, flag=True)
+            if progetto:
+                progetto_id = progetto[0]["id"]
+            else:
+                print("Progetto non trovato")
+                progetto_id = None  # Imposta a None se il progetto non viene trovato
+        else:
+            progetto_id = None
+        # Crea il filtro per il progetto
+        filtro_progetto = [["project_id", "=", progetto_id]] if progetto_id else []
+        # Aggiungi eventuali filtri presenti in 'risultato' e crea il filtro finale
+        filtri = risultato.get('filtri', [])
+        filtro_completo = filtri + filtro_progetto
+        output = read_record(risultato['modello'], filtro=filtro_completo, campi=risultato['campi'])
+        df = pd.DataFrame(data=output)
+        df = df.to_string(index=False)
+        return df
+    
+    except Exception as e:
+        return f"Operazione di lettura fallita: {e}"
 
 
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
