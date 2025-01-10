@@ -733,7 +733,7 @@ def modify_record(modello, filtri,dizionario):
             "args": [filtri],
             "kwargs": {
                 "fields": ["id"],
-                "limit": 1  # Restituisce almeno un record
+                "limit": 0  # Restituisce almeno un record
             }
         }
     }
@@ -748,7 +748,7 @@ def modify_record(modello, filtri,dizionario):
             record_ids = [record['id'] for record in results]
             
         else:
-            return "Nessun record trovato con i filtri forniti"
+            return "Nessun record trovato con i filtri forniti",payload_search
 
     except Exception as e:
         return f"Errore durante la ricerca degli ID: {e}"
@@ -804,8 +804,8 @@ def modifica_ERP(input_text):
             "modello": "calendar.event",
             "metodo": "write",
             "filtri": [
-                ["start", ">=", "2024-12-02 00:00:00"],
-                ["stop", "<=", "2024-12-02 23:59:59"]
+                ["start", ">=", "2024-12-02"],
+                ["stop", "<=", "2024-12-02"]
             ],
             "dizionario": {{
                 "start": "2024-12-18 14:00:00",
@@ -823,8 +823,8 @@ def modifica_ERP(input_text):
                 ["holiday_status_id", "=", 1],
             ],
             "dizionario": {{
-                "request_date_from": "2024-01-09 00:00:00",
-                "request_date_to": "2024-01-09 23:59:59",
+                "request_date_from": "2024-01-09",
+                "request_date_to": "2024-01-09",
             }}
         }}
         
@@ -861,7 +861,198 @@ def modifica_ERP(input_text):
     chain_modify = template_modifica | llm | parser
     dict = chain_modify.invoke({'domanda':input_text,'data_oggi':formatted_time}) 
     result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
-    return result
+    return result,dict
+
+def read_record(modello, filtro=None, campi=None,flag=False):
+    """
+    Legge i record da Odoo restituendo solo le informazioni richieste.
+    Args:
+        modello (str): Il modello da cui leggere i record (es. 'hr.leave', 'account.analytic.line').
+        filtro (list): Una lista di tuple per filtrare i record (es. [["user_id", "=", 1]]).
+        campi (list): Una lista di stringhe con i nomi dei campi da restituire (es. ["id", "name"]).
+    Returns:
+        list: Lista di dizionari con i dati richiesti oppure un messaggio di errore.
+    """
+    # URL di autenticazione
+    url_auth = f"{odoo_url}/web/session/authenticate"
+
+    payload_auth = {
+        "jsonrpc": "2.0",
+        "params": {
+            "db": db,
+            "login": username,
+            "password": pw
+        }
+    }
+    session = requests.Session()
+    # Autenticazione
+    response_auth = session.post(url_auth, json=payload_auth)
+    response_auth.raise_for_status()
+    result_auth = response_auth.json()
+    try:
+        uid = result_auth['result']['uid']
+    except KeyError:
+        return {"error": "Autenticazione fallita"}
+    # Ottieni l'employee_id dall'uid
+    url_employee = f"{odoo_url}/web/dataset/call_kw/hr.employee/search_read"
+    payload_employee = {
+        "jsonrpc": "2.0",
+        "params": {
+            "model": "hr.employee",
+            "method": "search_read",
+            "args": [[["user_id", "=", uid]]],  # Filtra per user_id (che corrisponde a uid)
+            "kwargs": {"fields": ["id"]}  # Restituisci solo l'employee_id
+        }
+    }
+    try:
+        response_employee = session.post(url_employee, json=payload_employee)
+        response_employee.raise_for_status()
+        employee_data = response_employee.json().get('result', [])
+        if not employee_data:
+            return {"error": "Dipendente non trovato per l'utente"}
+        employee_id = employee_data[0]["id"]  # Prendi l'employee_id
+    except Exception as e:
+        return {"error": f"Errore nella lettura dell'employee_id: {e}"}
+    # URL per leggere i dati
+    url_read = f"{odoo_url}/web/dataset/call_kw/{modello}/search_read"
+    # aggiungo uid o employee_id
+    if filtro is None:
+        filtro = []
+    if modello in modelli_con_uid and flag == False:
+        filtro.append(["user_id", "=", uid])
+    elif modello in modelli_con_employee_id and flag == False:
+        filtro.append(["employee_id", "=", employee_id])
+    #print(f'filtro: {filtro}')
+    # Gestiamo i campi: se non forniti, restituiamo tutti i campi
+    if campi is None:
+        campi = []  # Se campi è None, restituiamo tutti i campi
+    # Payload per la richiesta
+    payload_read = {
+        "jsonrpc": "2.0",
+        'method':'call',
+        "params": {
+            "model": modello,
+            "method": "search_read",
+            "args": [filtro],  # Usa il filtro se fornito, altrimenti leggi tutto
+            "kwargs": {"fields": campi}  # Usa i campi specificati, altrimenti restituisci tutto
+        },
+        "id":1
+    }
+    #print(payload_read)
+    try:
+        # Effettua la richiesta
+        response_read = session.post(url_read, json=payload_read)
+        response_read.raise_for_status()
+        # Risultato
+        result_read = response_read.json().get('result', [])
+        # Filtro finale sui campi (ridondante ma garantisce pulizia)
+        if campi:
+            result_read = [{campo: record.get(campo) for campo in campi} for record in result_read]
+        return result_read
+    except Exception as e:
+        return {"error": f"Errore nella lettura dei record: {e}"}
+
+def lettura_ERP(input_text):
+    template_lettura = PromptTemplate.from_template(
+    """
+        Sei un assistente virtuale che 
+        Genera un dizionario contenente i parametri da passare alla funzione 'leggi_record'. I parametri dovrebbero includere:
+        1. Il modello Odoo (ad esempio: 'calendar.event', 'hr.leave', etc.).
+        2. I campi richiesti (una lista di stringhe con i nomi dei campi da restituire, come 'id', 'name', etc.).
+
+        **La costruzione dei campi è fondamentale, devi inserire esclusivamente i campi essenziali a rispondere alla {domanda} dell'utente, senza inserire dati superflui**
+        per capire i campi necessari per rispondere alla domanda, analizza le componenti della {domanda} e usa solo i campi necessari
+        
+        NOTA BENE: se viene rifatta una richiesta riguardante uno specifico progetto non creare il campo 'filtri' ma aggiungi un campo 'nome progetto'
+        
+        STRUTTURA OUTPUT: *nell'output devi restituire ESCLUSIVAMENTE il dizionario richiesto, non aggiungere altro testo o caratteri*
+        
+        CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
+        
+        **SUGGERIMENTO: se l'utente richiede quali sono i progetti entra nel modulo account.analytic.line anziché nel modulo project.task**
+        **suggerimento: se l'utente richiede i task associati a un progetto di cui hai parlato prima cerca nella risposta precedente ({chat_history}) l'id del progetto (project_id) per creare il json**
+        
+        in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno 2025):
+        segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
+        Fornisci una risposta con i parametri nei seguenti formati:
+        
+        In base alla {domanda} crea un filtro e aggiungilo (si dovra chiamare 'filtri') al dizionario di output (in questo caso usa una lista di liste)
+        
+        NOTA BENE: **non creare mai filtri relativi all'employee_id,user_id,uid**
+        NOTA BENE: quando costruisci i filtri adotta la sintassi corretta di ODOO, per esempio non esiste refused ma refuse
+        
+        segui attentamente i seguenti esempi:
+        ESEMPI
+            1. **Leggere gli eventi in calendario per l'utente**
+            - Richiesta: "Voglio vedere gli eventi in calendario"
+            - Parametri di input generati:
+            {{
+                "modello": "calendar.event",
+                "campi": ["name", "start", "stop"]
+            }}
+            2. **Leggere le ferie di un dipendente**
+                - Richiesta: "Mostrami le ferie per l'utente"
+                - Parametri di input generati:
+                {{
+                    "modello": "hr.leave",
+                    "campi": ["name", "date_from", "date_to"]
+                    "filtri": inserisci i filtri che crei leggendo la {domanda}
+                }}
+            3. **Leggere il foglio ore per un progetto specifico**
+                - Richiesta: "Fammi vedere le ore lavorate sul progetto XYZ"
+                - Parametri di input generati:
+                {{
+                    "modello": "account.analytic.line",
+                    "campi": ["project_id", "unit_amount", "date"],
+                    "nome progetto":inserisci il nome del progetto
+                }}
+                - Richiesta: "leggi il foglio ore di un giorno"
+                - Parametri di input generati:
+                {{
+                    "modello": "account.analytic.line",
+                    "campi": ["project_id", "unit_amount", "date"],
+                    "nome progetto":inserisci il nome del progetto
+                }}
+            4. **dimmi i task associati al progetto X**
+                - Richiesta: "dimmi i task associati al progetto X"
+                - Parametri di input generati:
+                {{
+                    "modello": "project.task",
+                    "campi": ['id','name'],
+                    "nome progetto":inserisci il nome del progetto
+                }}
+            NOTA BENE: *in un caso come questo, non creare il campo 'filtri' ma sfrutta il campo 'nome progetto'*
+            5. **Leggere le presenze giornaliere per un dipendente**
+                - Richiesta: "Mostrami le presenze giornaliere per l'utente"
+                - Parametri di input generati:
+            {{
+                    "modello": "hr.attendance",
+                    "campi": ["id", "check_in", "check_out", "employee_id"]
+                }}
+            7. **Leggere gli approvatori delle richieste di ferie**
+                - Richiesta: "Chi è l'approvatore della mia richiesta di ferie?"
+                - Parametri di input generati:
+                {{
+                    "modello": "hr.leave",
+                    "campi": ["id", "name", "state"]
+                }}
+            8. **Visualizzare i progetti dell'utente**
+            -Richiesta: "dimmi i miei progetti"
+            - Parametri di input generati:
+                {{
+                    "modello": "account.analytic.line",
+                    "campi": ["project_id"]
+                }}
+
+            Ogni esempio restituisce un dizionario che rappresenta i parametri corretti da passare alla funzione `leggi_record`. Questi parametri vengono calcolati automaticamente in base alla richiesta dell'utente, e la funzione si occupa di fare il filtraggio in base all'utente autenticato.
+            NOTA BENE: se nell'input non vedi una data specifica, usa questa data corrente: {data_oggi}. Sfrutta {data_oggi} per avere un contesto temporale
+            
+            domdanda:{domanda}
+            data_oggi:{data_oggi}
+    """)
+    chain_lettura = template_lettura | llm
+    risposta = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time})
+            
 
 
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
