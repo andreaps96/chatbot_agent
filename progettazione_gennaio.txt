@@ -1,0 +1,16 @@
+Gennaio
+
+6-10: 
+	passaggio logica da albero decisionale ad agent
+
+
+13-17:
+	passaggio logica da albero decisionale ad agent, redifinizione dei tool del chatbot, tool mail/tool slack
+
+
+20-24:
+	migrazione da istanza di sviluppo a DEV, tool Q&A su tematiche HR	
+
+
+27-31:
+	Controlli generali, studio CNN (andrea), studio meta-human (paolo)

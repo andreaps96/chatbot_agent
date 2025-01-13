@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 from datetime import datetime
 import pytz
 import pandas as pd
-
+import string
 
 
 load_dotenv()
@@ -77,6 +77,20 @@ formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
 #anno corrent
 current_year = current_time.year
 
+def cifratura(text,shift):
+    #scrivo tutte le lettere
+    alphabet = string.ascii_lowercase
+
+
+    shifted_alphabet = alphabet[shift:] + alphabet[:shift]
+
+    # Crea una mappa di traduzione
+    translation_table = str.maketrans(alphabet, shifted_alphabet)
+    encrypted_text = text.lower().translate(translation_table)
+    return encrypted_text
+
+shift = 4
+
 #METODO PER EFFETTURA AUTENTICAZIONE SU ODOO (OK)
 def autenticazione():
     url_auth = f"{odoo_url}/web/session/authenticate"
@@ -99,6 +113,7 @@ def autenticazione():
         return "Autenticazione fallita"
     
     return uid,session
+
 
 #METODO PER TROVARE IL NOME CORRETTO DI UN PROGETTO (OK)
 def find_project(project_name):
@@ -915,9 +930,9 @@ def read_record(modello,filtro=None,campi=None,flag=None):
             "args": [filtro],  # Usa il filtro se fornito, altrimenti leggi tutto
             "kwargs": {"fields": campi}  # Usa i campi specificati, altrimenti restituisci tutto
         },
-        "id":1
+        "id":0
     }
-    print(payload_read)
+    #print(payload_read)
     try:
         # Effettua la richiesta
         response_read = session.post(url_read, json=payload_read)
@@ -927,7 +942,7 @@ def read_record(modello,filtro=None,campi=None,flag=None):
         # Filtro finale sui campi (ridondante ma garantisce pulizia)
         if campi:
             result_read = [{campo: record.get(campo) for campo in campi} for record in result_read]
-
+        #print(result_read)
         return result_read
     
     except Exception as e:
@@ -950,8 +965,9 @@ def read_ERP(input_text):
             STRUTTURA OUTPUT: *nell'output devi restituire ESCLUSIVAMENTE il dizionario richiesto, non aggiungere altro testo o caratteri*
             
             CONTENUTO OUTPUT: *i dati contenuti nell'output devono riguardare esclusivamente l'utente che fa la {domanda}*
+
+            FORMA OUTPUT: non inserire alcun testo o formattazione non richiesta, crea solo il json
             
-         
             in tutti i campi in cui è necessaria la data, devi sempre inserire nel dizionario di output i parametri temporali (se non viene specificato l'anno usa l'anno {anno_attuale}):
             segui solo la struttura degli esempi, se vedi un modello specifico usa i parametri dell'esempio corrispondente
             Fornisci una risposta con i parametri nei seguenti formati:
@@ -969,6 +985,7 @@ def read_ERP(input_text):
                 "modello": "calendar.event",
                 "campi": ["name", "start", "stop"]
             }}
+
             2. **Leggere le ferie di un dipendente**
                 - Richiesta: "Mostrami le ferie per l'utente"
                 - Parametri di input generati:
@@ -977,6 +994,7 @@ def read_ERP(input_text):
                     "campi": ["name", "date_from", "date_to"]
                     "filtri": inserisci i filtri che crei leggendo la {domanda}
                 }}
+
             3. **Leggere le presenze giornaliere per un dipendente**
                 - Richiesta: "Mostrami le presenze giornaliere per l'utente"
                 - Parametri di input generati:
@@ -984,13 +1002,15 @@ def read_ERP(input_text):
                     "modello": "hr.attendance",
                     "campi": ["id", "check_in", "check_out", "employee_id"]
                 }}
+
             4. **Leggere i progetti assegnati**
                 - Richiesta: "dimmi i progetti a cui sono assegnato"
                 - Parametri di input generati:
             {{
-                    "modello": "project.project",
-                    "campi": ["name"],  
+                    "modello": "account.analytic.line",
+                    "campi": ["project_id"],  
                 }}
+
             5. **Leggere il foglio ore**
                 - Richiesta: "leggimi il foglio ore della settimana scorsa"
                 - Parametri di input generati:
@@ -1000,8 +1020,33 @@ def read_ERP(input_text):
                     "filtri": inserisci i filtri che crei leggendo la {domanda}
                 }}
             
+            6. **Leggere il foglio ore per un progetto specifico**
+            - Richiesta: "Fammi vedere le ore lavorate sul progetto XYZ"
+            - Parametri di input generati:
+            {{
+                "modello": "account.analytic.line",
+                "campi": ["project_id", "unit_amount", "date"],
+                "nome progetto":inserisci il nome del progetto
+            }}
 
+            - Richiesta: "leggi il foglio ore di un giorno"
+            - Parametri di input generati:
+            {{
+                "modello": "account.analytic.line",
+                "campi": ["project_id", "unit_amount", "date"],
+                "nome progetto":inserisci il nome del progetto
+            }}
+            
+            7. **Trovare i dati di contatto di un utente**
+            - Richiesta: "Mostrami i dati di contatto di nome cognome"
+            - Parametri di input generati:
+            {{
+                "modello": "hr.employee",
+                "campi": [inserisci i campi che reputi opportuni in base alla richiesta],
+                "filtri": [["name", "=", "nome cognome"]]
+            }}
 
+                       
             domdanda:{domanda}
             data_oggi:{data_oggi}
             anno_attuale:{anno_attuale}
@@ -1012,16 +1057,19 @@ def read_ERP(input_text):
         
         filtri = risultato.get('filtri',[])
         output = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
-        df = pd.DataFrame(data=output)
-        df = df.to_string(index=False)
+        print(output)
+        #NON HO GESTITO IL CASO DI PIU CATTURE DAL DB
+        for key in output:
+            if isinstance(output[key],str):
+                output[key] = cifratura(output[key],shift)
 
-        return df
+        return output
     
     except Exception as e:
         return f'Operazione di lettura fallita: {e}'
 
 #print(lettura_ERP('leggimi il foglio ore di questa settimana sul progetto odoo chatbot'))
-print(read_ERP("leggimi il foglio ore di questa settimana"))
+print(read_ERP("dimmi tutti gli eventi in calendario per gennaio"))
 
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
