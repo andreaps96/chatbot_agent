@@ -45,7 +45,7 @@ modelli_con_uid = [
     "crm.lead",          # Opportunità di vendita (CRM)
     "helpdesk.ticket",  # Ticket di supporto assegnati
     'project.project',
-    'project.task'
+    
 ]
 
 id_ferie = {
@@ -143,38 +143,46 @@ def find_project(project_name):
     "params": {
         "model": "account.analytic.line",
         "method": "search_read",
-        "args": [[]],  # Aggiungi filtri se necessario
+        "args": [],  # Aggiungi filtri se necessario
         "kwargs": {
             "fields": ["project_id"]  # Ottieni solo il campo project_id
                 }
             }
         }
-
+    payload_project['params']['args'].append([["employee_id", "=", employee_id]])
     # Effettuo la richiesta per ottenere i progetti
     response_project = session.post(url_project, json=payload_project)
     response_project.raise_for_status()
     projects = response_project.json().get("result", [])
     project_list = []
-    
+    project_id = []
+    #RIPRENDERE DA QUI
     # Gestisco i risultati
     if not projects:
         return "Nessun progetto trovato per il dipendente."
     else:
         for project in projects:
             project_list.append(project['project_id'][1])
+            project_id.append(project['project_id'][0])
+            
         project_set = list(set(project_list))
+        id_set = list(set(project_id))
         
+    print(project_set,id_set)
     #uso fuzzywuzzy per verificare se il mio progetto esiste e trovare il nome in db
     candidate,score = process.extractOne(project_name,project_set)
     if score > 90:
-        return candidate
+        for prog,id in zip(project_set,id_set):
+            if prog == candidate: 
+                
+                return candidate,id
     else:
         return f'Mi spiace, ma non ho trovato il progetto {project_name}'
 
 #METODO PER TROVARE IL NOME CORRETTO DI UN TASK ASSOCIATO A UN PROGETTO (OK)
 def find_task(project_name,task_name):
     #trovo il nome corretto del progetto
-    project = find_project(project_name)
+    project,_ = find_project(project_name)
     #autenticazione
     _,session = autenticazione()
     #cerco i task associati al progetto
@@ -559,7 +567,7 @@ def operazione_ERP(input_text):
         metodo = risposta['metodo']
         dizionario = risposta['dizionario']
         if 'project_id' in dizionario:
-            dizionario['project_id'] = find_project(dizionario['project_id'])
+            dizionario['project_id'],_ = find_project(dizionario['project_id'])
         if 'task_id' in dizionario:
             dizionario['task_id'] = find_task(dizionario['project_id'],dizionario['task_id'])
 
@@ -874,7 +882,7 @@ def modifica_ERP(input_text):
     result = modify_record(dict['modello'],dict['filtri'],dict['dizionario'])
     return result,dict
 
-def read_record(modello,filtro=None,campi=None,flag=None):
+def read_record(modello,filtro=None,campi=None,dizionario=None):
     uid,session = autenticazione()
      # Ottieni l'employee_id dall'uid
     url_employee = f"{odoo_url}/web/dataset/call_kw/hr.employee/search_read"
@@ -901,11 +909,18 @@ def read_record(modello,filtro=None,campi=None,flag=None):
        # aggiungo uid o employee_id
     if filtro is None:
         filtro = []
+        
     if modello in modelli_con_uid:
         filtro.append(["user_id", "=", uid])
     elif modello in modelli_con_employee_id:
         filtro.append(["employee_id", "=", employee_id])
-
+        
+    if 'user_ids' in dizionario:
+        filtro.append(["user_ids", "=", uid])
+        if 'nome progetto' in dizionario:
+            _,prog = find_project(dizionario['nome progetto'])
+            filtro.append(["project_id", "=", prog])
+            
     if campi is None:
         campi = []
 
@@ -922,7 +937,7 @@ def read_record(modello,filtro=None,campi=None,flag=None):
         },
         "id":0
     }
-    #print(payload_read)
+    print(payload_read)
     try:
         # Effettua la richiesta
         response_read = session.post(url_read, json=payload_read)
@@ -1053,7 +1068,26 @@ def read_ERP(input_text):
                 "campi": [inserisci i campi che reputi opportuni in base alla richiesta],
                 "filtri": [["name", "=", "nome cognome"]]
             }}
-
+            
+            8. **Controllare i task**
+            -Richiesta "dimmi i miei task"
+            -Parametri di input generati:
+            {{
+                "modello": "project.task",
+                "campi": [inserisci i campi opportuni per rispondere alla domanda],
+                "user_ids": "user_ids" (in domande come questa inserisci sempre questa coppia chiave-valore standard)
+            }}
+            
+            9 **Task su un progetto**
+            -Richiesta "dimmi i task associati al progetto x" 
+            -Parametri di input generati:
+            {{
+                "modello": "project.task",
+                "campi": [inserisci i campi opportuni per rispondere alla domanda],
+                "user_ids": "user_ids" **(in domande come questa inserisci sempre questa coppia chiave-valore standard)**,
+                "nome progetto":"x" (inserisci in questo coppia il nome del progetto di cui si desidera leggere i task)
+            }}
+            **REGOLA DI LOGICA**: se come modello viene usato project.task, al dizionario di output devi sempre aggiungere la coppia chiave-valore "user_ids": "user_ids"
                        
             domdanda:{domanda}
             data_oggi:{data_oggi}
@@ -1062,9 +1096,9 @@ def read_ERP(input_text):
     try:
         chain_lettura = template_lettura | llm | JsonOutputParser()
         risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time,'anno_attuale':current_year})
-        
+        print(risultato)
         filtri = risultato.get('filtri',[])
-        output_list = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
+        output_list = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'],dizionario=risultato)
         
         # encrypted_list = []
         
@@ -1107,7 +1141,7 @@ def aes_decrypt(value, key, iv):
 
     return decrypted_data.decode()
 
-#print(read_ERP("leggimi il foglio ore della settimana"))
+print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
