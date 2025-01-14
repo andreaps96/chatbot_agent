@@ -1055,6 +1055,7 @@ def read_ERP(input_text):
                 "filtri": [["name", "=", "nome cognome"]]
             }}
 
+            
                        
             domdanda:{domanda}
             data_oggi:{data_oggi}
@@ -1067,18 +1068,18 @@ def read_ERP(input_text):
         filtri = risultato.get('filtri',[])
         output_list = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
         
-        #NON HO GESTITO IL CASO DI PIU CATTURE DAL DB
-        encrypted_list = []
+        # encrypted_list = []
         
-        for dictionary in output_list:
-            encrypted_dict = {}
-            for key_item, value in dictionary.items():
-                value = str(value)
+        # for dictionary in output_list:
+        #     encrypted_dict = {}
+        #     for key_item, value in dictionary.items():
+        #         value = str(value)
                 
-                encrypted_dict[key_item] = aes_encrypt(value,key,iv)
-            encrypted_list.append(encrypted_dict)
+        #         encrypted_dict[key_item] = aes_encrypt(value,key,iv)
+        #     encrypted_list.append(encrypted_dict)
         
-        return encrypted_list
+        # return encrypted_list
+        return output_list
     
     except Exception as e:
         return f'Operazione di lettura fallita: {e}'
