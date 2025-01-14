@@ -7,8 +7,8 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_openai import ChatOpenAI
 from datetime import datetime
 import pytz
-import pandas as pd
-import string
+from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
+from cryptography.hazmat.primitives import padding
 
 
 load_dotenv()
@@ -16,11 +16,11 @@ odoo_url = "https://dev-unitiva.odoo.com/"
 username = os.getenv("user")
 pw = os.getenv('pw')
 db = os.getenv('db')
-api_key= os.getenv('openai_key')
+api_key = os.getenv('openai_key')
 
 llm = ChatOpenAI(
     api_key=api_key,
-    model='gpt-4o',
+    model='gpt-4',
     temperature=0
 )
 
@@ -77,20 +77,11 @@ formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
 #anno corrent
 current_year = current_time.year
 
-def cifratura(text,shift):
-    #scrivo tutte le lettere
-    alphabet = string.ascii_lowercase
-
-
-    shifted_alphabet = alphabet[shift:] + alphabet[:shift]
-
-    # Crea una mappa di traduzione
-    translation_table = str.maketrans(alphabet, shifted_alphabet)
-    encrypted_text = text.lower().translate(translation_table)
-    return encrypted_text
-
-shift = 4
-
+#chiave e vettore di inizializzazione per AES
+key = b"questa_e_una_chiave_di_256bit!!"
+key = key.ljust(32, b'0')  # Riempie con zeri fino a 32 byte
+iv = b"iv_di_16_byte___"   
+              
 #METODO PER EFFETTURA AUTENTICAZIONE SU ODOO (OK)
 def autenticazione():
     url_auth = f"{odoo_url}/web/session/authenticate"
@@ -948,6 +939,24 @@ def read_record(modello,filtro=None,campi=None,flag=None):
     except Exception as e:
         return {"error": f"Errore nella lettura dei record: {e}"}
 
+# Funzione per cifrare un testo
+def aes_encrypt(value, key, iv):
+    # Convertire il valore in byte (se non lo è già)
+    if isinstance(value, str):
+        value = value.encode()
+
+    # Aggiungere il padding per garantire che sia un multiplo di 16 byte
+    padder = padding.PKCS7(128).padder()
+    padded_value = padder.update(value) + padder.finalize()
+
+    # Configurazione del cifrario
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+
+    # Cifratura
+    encrypted = encryptor.update(padded_value) + encryptor.finalize()
+    return encrypted
+        
 def read_ERP(input_text):
     template_lettura = PromptTemplate.from_template(
         """ 
@@ -1025,7 +1034,7 @@ def read_ERP(input_text):
             - Parametri di input generati:
             {{
                 "modello": "account.analytic.line",
-                "campi": ["project_id", "unit_amount", "date"],
+                "campi": ["unit_amount", "date"],
                 "nome progetto":inserisci il nome del progetto
             }}
 
@@ -1056,21 +1065,50 @@ def read_ERP(input_text):
         risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time,'anno_attuale':current_year})
         
         filtri = risultato.get('filtri',[])
-        output = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
-        print(output)
+        output_list = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'])
+        
         #NON HO GESTITO IL CASO DI PIU CATTURE DAL DB
-        for key in output:
-            if isinstance(output[key],str):
-                output[key] = cifratura(output[key],shift)
-
-        return output
+        encrypted_list = []
+        
+        for dictionary in output_list:
+            encrypted_dict = {}
+            for key_item, value in dictionary.items():
+                value = str(value)
+                
+                encrypted_dict[key_item] = aes_encrypt(value,key,iv)
+            encrypted_list.append(encrypted_dict)
+        
+        return encrypted_list
     
     except Exception as e:
         return f'Operazione di lettura fallita: {e}'
 
-#print(lettura_ERP('leggimi il foglio ore di questa settimana sul progetto odoo chatbot'))
-print(read_ERP("dimmi tutti gli eventi in calendario per gennaio"))
+def aes_decrypt(value, key, iv):
+    """
+    Decifra un valore cifrato con AES in modalità CBC.
 
+    Args:
+        value (bytes): Il valore cifrato.
+        key (bytes): La chiave AES.
+        iv (bytes): Il vettore di inizializzazione (IV).
+
+    Returns:
+        str: Il valore decifrato come stringa.
+    """
+    # Configurazione del cifrario
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+
+    # Decifratura
+    padded_data = decryptor.update(value) + decryptor.finalize()
+
+    # Rimozione del padding
+    unpadder = padding.PKCS7(128).unpadder()
+    decrypted_data = unpadder.update(padded_data) + unpadder.finalize()
+
+    return decrypted_data.decode()
+
+#print(read_ERP("leggimi il foglio ore della settimana"))
 #rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
