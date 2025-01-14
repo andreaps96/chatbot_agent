@@ -162,17 +162,16 @@ def find_project(project_name):
         return "Nessun progetto trovato per il dipendente."
     else:
         for project in projects:
-            project_list.append(project['project_id'][1])
-            project_id.append(project['project_id'][0])
+            if (project['project_id'][1]) not in project_list:
+                project_list.append(project['project_id'][1])
+            if project['project_id'][0] not in project_id:
+                project_id.append(project['project_id'][0])
             
-        project_set = list(set(project_list))
-        id_set = list(set(project_id))
         
-    print(project_set,id_set)
     #uso fuzzywuzzy per verificare se il mio progetto esiste e trovare il nome in db
-    candidate,score = process.extractOne(project_name,project_set)
+    candidate,score = process.extractOne(project_name,project_list)
     if score > 90:
-        for prog,id in zip(project_set,id_set):
+        for prog,id in zip(project_list,project_id):
             if prog == candidate: 
                 
                 return candidate,id
@@ -944,10 +943,10 @@ def read_record(modello,filtro=None,campi=None,dizionario=None):
         response_read.raise_for_status()
         # Risultato
         result_read = response_read.json().get('result', [])
-        # Filtro finale sui campi (ridondante ma garantisce pulizia)
+        
         if campi:
             result_read = [{campo: record.get(campo) for campo in campi} for record in result_read]
-        #print(result_read)
+        
         return result_read
     
     except Exception as e:
