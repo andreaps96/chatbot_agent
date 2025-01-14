@@ -1082,7 +1082,7 @@ def read_ERP(input_text):
             -Parametri di input generati:
             {{
                 "modello": "project.task",
-                "campi": [inserisci i campi opportuni per rispondere alla domanda],
+                "campi": [], (inserisci i campi essenziali a rispondere alla domanda rispettando la sintassi di odoo, evita i campi superflui)
                 "user_ids": "user_ids" **(in domande come questa inserisci sempre questa coppia chiave-valore standard)**,
                 "nome progetto":"x" (inserisci in questo coppia il nome del progetto di cui si desidera leggere i task)
             }}
@@ -1145,5 +1145,4 @@ print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
-#print(invio_mail("andrea pastore","ciao","FNS"))
 #print(operazione_ERP("crea un evento in calendario per domani con nome prova"))
