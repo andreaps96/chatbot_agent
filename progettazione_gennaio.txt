@@ -1,6 +1,7 @@
 Gennaio
+
 13-17:
-	passaggio logica da albero decisionale ad agent, redifinizione dei tool del chatbot, 
+	passaggio logica da albero decisionale ad agent, redifinizione dei tool del chatbot
 
 20-24:
 	migrazione da istanza di sviluppo a DEV, tool Q&A su tematiche HR	

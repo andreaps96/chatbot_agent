@@ -866,7 +866,6 @@ def modifica_ERP(input_text):
         data_oggi:{data_oggi}
     """)
     
-    
     # Data corrente formattata
     formatted_time = datetime.now().strftime("%Y-%m-%d")
     parser = JsonOutputParser()
@@ -1055,7 +1054,6 @@ def read_ERP(input_text):
                 "filtri": [["name", "=", "nome cognome"]]
             }}
 
-            
                        
             domdanda:{domanda}
             data_oggi:{data_oggi}
