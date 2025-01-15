@@ -326,7 +326,7 @@ def operazione(modello,metodo,dizionario):
     elif modello == 'account.analytic.line':
         # Esempio di ricerca dell'ID di un progetto tramite il nome
         project_name = dizionario['project_id']  # Il nome del progetto che hai
-        #print(dizionario['project_id'] )
+        
         # URL per cercare il progetto
         url_project = f"{odoo_url}/web/dataset/call_kw/project.project/search_read"
         payload_project = {
@@ -353,7 +353,8 @@ def operazione(modello,metodo,dizionario):
             return 'Progetto non trovato'
         
         dizionario['project_id'] = project_id
-        #caso del task
+        
+        #CASO DEL TASK
         if "task_id" in dizionario:
             task_name = dizionario['task_id']
             url_task = f"{odoo_url}/web/dataset/call_kw/project.task/search_read"
@@ -576,8 +577,6 @@ def operazione_ERP(input_text):
     except Exception as e:
         return f"Errore nell'esecuzione dell'operazione: {str(e)}"
     
-#print(operazione_ERP("aggiungi un'ora al foglio ore di oggi al progetto AGILE - JAVA"))
-
 def delete_record(modello,filtri):
     uid,session = autenticazione()
     # Ricerca degli ID dei record da eliminare
@@ -734,7 +733,7 @@ def eliminazione_ERP(input_text):
     result = delete_record(dict['modello'],dict['filtri'])
     return result
 
-#print(eliminazione_ERP("cancella tutte le fatture del cliente Aloschi"))
+
 def modify_record(modello, filtri,dizionario):
     uid, session = autenticazione()
     
@@ -936,7 +935,7 @@ def read_record(modello,filtro=None,campi=None,dizionario=None):
         },
         "id":0
     }
-    print(payload_read)
+  
     try:
         # Effettua la richiesta
         response_read = session.post(url_read, json=payload_read)
@@ -1095,7 +1094,7 @@ def read_ERP(input_text):
     try:
         chain_lettura = template_lettura | llm | JsonOutputParser()
         risultato = chain_lettura.invoke({'domanda':input_text,'data_oggi':formatted_time,'anno_attuale':current_year})
-        print(risultato)
+        
         filtri = risultato.get('filtri',[])
         output_list = read_record(risultato['modello'],filtro=filtri,campi=risultato['campi'],dizionario=risultato)
         
@@ -1140,8 +1139,8 @@ def aes_decrypt(value, key, iv):
 
     return decrypted_data.decode()
 
-print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
-#rint(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
+#print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
+#print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
