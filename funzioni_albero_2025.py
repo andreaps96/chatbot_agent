@@ -68,8 +68,13 @@ id_ferie = {
 # Imposta il fuso orario (ad esempio 'Europe/Rome')
 timezone = pytz.timezone('Europe/Rome')
 
+
 # Ottieni la data e ora correnti
 current_time = datetime.now(timezone)
+
+#ottieni l'anno
+anno_attuale = current_time.year
+
 
 # Formatta la data nel formato richiesto
 formatted_time = current_time.strftime("%Y-%m-%d %H:%M:%S")
