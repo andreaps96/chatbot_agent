@@ -9,6 +9,9 @@ from datetime import datetime
 import pytz
 from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
 from cryptography.hazmat.primitives import padding
+import cv2
+import matplotlib.pyplot as plt
+from PIL import Image
 
 
 load_dotenv()
@@ -1150,6 +1153,40 @@ def aes_decrypt(value, key, iv):
     decrypted_data = unpadder.update(padded_data) + unpadder.finalize()
 
     return decrypted_data.decode()
+
+
+def fn_ricerca_ERP(list_meme):
+    url = r"https://pbs.twimg.com/media/Eaa-UELWsAM9lUy.jpg:large"
+    
+    str_1 = "Leggimi il foglio ore di questa settimana"
+    str_2 = "Metti ferie per mercoledì prossimo"
+    str_3 = "Vado a fumare"
+    if str_1 in list_meme and str_2 in list_meme and str_3 in list_meme:
+        print('ciau')
+        im = Image.open(requests.get(url, stream=True).raw)
+        plt.figure(figsize=(10,10))
+        plt.title("FORZA NAPOLI SEMPRE")
+        plt.imshow(im)
+        plt.show()
+
+
+# def fn_ricerca_ERP(list_meme):
+#     str_1 = "Leggimi il foglio ore di questa settimana"
+#     str_2 = "Metti ferie per mercoledì prossimo "
+#     str_3 = "Vado a fumare"
+    
+#     # if str_1 in list_meme and str_2 in list_meme and str_3 in list_meme:
+#     print('ciau')
+#     img = r"C:\Users\Unitiva\Desktop\chatbot_agent\Eaa-UELWsAM9lUy.jpg"
+#     img = cv2.imread(img)
+#     img = cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+
+#     plt.figure(figsize=(10,10))
+#     plt.title("FORZA NAPOLI SEMPRE")
+
+#     plt.imshow(img)
+#     plt.show()
+# fn_ricerca_ERP([])
 
 #print(read_ERP("in che date di gennaio 2025 ho lavorato al progetto ODOO CHATBOT?"))
 #print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
