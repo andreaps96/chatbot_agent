@@ -20,7 +20,7 @@ api_key = os.getenv('openai_key')
 
 llm = ChatOpenAI(
     api_key=api_key,
-    model='gpt-4',
+    model='gpt-4o',
     temperature=0
 )
 
