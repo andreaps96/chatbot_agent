@@ -143,7 +143,7 @@ def find_project(project_name):
     "params": {
         "model": "account.analytic.line",
         "method": "search_read",
-        "args": [],  # Aggiungi filtri se necessario
+        "args": [],  
         "kwargs": {
             "fields": ["project_id"]  # Ottieni solo il campo project_id
                 }
@@ -156,7 +156,7 @@ def find_project(project_name):
     projects = response_project.json().get("result", [])
     project_list = []
     project_id = []
-    #RIPRENDERE DA QUI
+    
     # Gestisco i risultati
     if not projects:
         return "Nessun progetto trovato per il dipendente."
@@ -173,7 +173,6 @@ def find_project(project_name):
     if score > 90:
         for prog,id in zip(project_list,project_id):
             if prog == candidate: 
-                
                 return candidate,id
     else:
         return f'Mi spiace, ma non ho trovato il progetto {project_name}'
@@ -182,8 +181,9 @@ def find_project(project_name):
 def find_task(project_name,task_name):
     #trovo il nome corretto del progetto
     project,_ = find_project(project_name)
+    
     #autenticazione
-    _,session = autenticazione()
+    uid,session = autenticazione()
     #cerco i task associati al progetto
     url_task = f"{odoo_url}/web/dataset/call_kw/project.task/search_read"
     payload_task = {
@@ -514,7 +514,7 @@ def operazione_ERP(input_text):
             "dizionario": {{
                 "unit_amount": 1.0,      
                 "date": "2024-12-15",
-                "project_id": 'X',
+                "project_id": "X"
             }}
         }}
         
@@ -526,7 +526,7 @@ def operazione_ERP(input_text):
             "dizionario": {{
                 "unit_amount": 1.0,      
                 "date": "2024-12-15",
-                "project_id": 'X',
+                "project_id": "X",
                 "task_id":Y
             }}
         }}
@@ -570,7 +570,7 @@ def operazione_ERP(input_text):
             dizionario['project_id'],_ = find_project(dizionario['project_id'])
         if 'task_id' in dizionario:
             dizionario['task_id'] = find_task(dizionario['project_id'],dizionario['task_id'])
-
+        print(dizionario)
         result = operazione(modello, metodo, dizionario)
         return result
         
@@ -1141,7 +1141,7 @@ def aes_decrypt(value, key, iv):
 
 #print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
 #print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
-#print(operazione_ERP("elimina un'ora al foglio ore di oggi al progetto odoo chatbot"))
+print(operazione_ERP("metti un'ora al foglio ore di oggi al task analisi del progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
 #print(operazione_ERP("crea un evento in calendario per domani con nome prova"))
