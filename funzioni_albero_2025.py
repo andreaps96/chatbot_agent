@@ -1146,7 +1146,7 @@ def aes_decrypt(value, key, iv):
 
 #print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
 #print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
-print(operazione_ERP("metti un'ora al foglio ore di oggi al task analisi del progetto odoo chatbot"))
+#print(operazione_ERP("metti un'ora al foglio ore di oggi al task analisi del progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
 #print(eliminazione_ERP("elimina il foglio ore di oggi al progetto ODOO CHATBOT"))
 #print(operazione_ERP("crea un evento in calendario per domani con nome prova"))
