@@ -920,9 +920,10 @@ def read_record(modello,filtro=None,campi=None,dizionario=None):
         
     if 'user_ids' in dizionario:
         filtro.append(["user_ids", "=", uid])
-        if 'nome progetto' in dizionario:
-            _,prog = find_project(dizionario['nome progetto'])
-            filtro.append(["project_id", "=", prog])
+        
+    if 'nome progetto' in dizionario:
+        _,prog = find_project(dizionario['nome progetto'])
+        filtro.append(["project_id", "=", prog])
             
     if campi is None:
         campi = []
@@ -979,7 +980,7 @@ def read_ERP(input_text):
         """ 
             sei un assistente virtuale addetto alla lettura di record su un db odoo.
 
-             Genera un dizionario contenente i parametri da passare alla funzione 'read_record'. I parametri dovrebbero includere:
+            Genera un dizionario contenente i parametri da passare alla funzione 'read_record'. I parametri dovrebbero includere:
             1. Il modello Odoo (ad esempio: 'calendar.event', 'hr.leave', etc.).
             2. I campi richiesti (una lista di stringhe con i nomi dei campi da restituire, come 'id', 'name', etc.).
 
@@ -1073,7 +1074,7 @@ def read_ERP(input_text):
             }}
             
             8. **Controllare i task**
-            -Richiesta "dimmi i miei task"
+            -Richiesta "dimmi i miei task" (assumi questa struttura anche per domande simili)
             -Parametri di input generati:
             {{
                 "modello": "project.task",
@@ -1113,7 +1114,13 @@ def read_ERP(input_text):
         #         encrypted_dict[key_item] = aes_encrypt(value,key,iv)
         #     encrypted_list.append(encrypted_dict)
         
-        # return encrypted_list
+        # return {
+        # "warning": "COMPLETE_OUTPUT_REQUIRED",
+        # "type": "encrypted_data",
+        # "data": encrypted_list,
+        # "message": "Questi dati sono criptati e devono essere riportati integralmente senza modifiche"
+        # }
+        #return encrypted_list
         return output_list
     
     except Exception as e:
@@ -1144,7 +1151,7 @@ def aes_decrypt(value, key, iv):
 
     return decrypted_data.decode()
 
-#print(read_ERP("dimmi i task associati al progetto odoo chatbot"))
+#print(read_ERP("in che date di gennaio 2025 ho lavorato al progetto ODOO CHATBOT?"))
 #print(modifica_ERP("sposta le ferie di domani al 13 gennaio"))
 #print(operazione_ERP("metti un'ora al foglio ore di oggi al task analisi del progetto odoo chatbot"))
 #print(eliminazione_ERP("elimina le ferie di domani"))    
