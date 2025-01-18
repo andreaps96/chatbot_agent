@@ -9,7 +9,6 @@ from datetime import datetime
 import pytz
 from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
 from cryptography.hazmat.primitives import padding
-import cv2
 import matplotlib.pyplot as plt
 from PIL import Image
 
@@ -578,7 +577,7 @@ def operazione_ERP(input_text):
             dizionario['project_id'],_ = find_project(dizionario['project_id'])
         if 'task_id' in dizionario:
             dizionario['task_id'] = find_task(dizionario['project_id'],dizionario['task_id'])
-        print(dizionario)
+        #print(dizionario)
         result = operazione(modello, metodo, dizionario)
         return result
         
@@ -961,22 +960,22 @@ def read_record(modello,filtro=None,campi=None,dizionario=None):
         return {"error": f"Errore nella lettura dei record: {e}"}
 
 # Funzione per cifrare un testo
-def aes_encrypt(value, key, iv):
-    # Convertire il valore in byte (se non lo è già)
-    if isinstance(value, str):
-        value = value.encode()
+# def aes_encrypt(value, key, iv):
+#     # Convertire il valore in byte (se non lo è già)
+#     if isinstance(value, str):
+#         value = value.encode()
 
-    # Aggiungere il padding per garantire che sia un multiplo di 16 byte
-    padder = padding.PKCS7(128).padder()
-    padded_value = padder.update(value) + padder.finalize()
+#     # Aggiungere il padding per garantire che sia un multiplo di 16 byte
+#     padder = padding.PKCS7(128).padder()
+#     padded_value = padder.update(value) + padder.finalize()
 
-    # Configurazione del cifrario
-    cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
+#     # Configurazione del cifrario
+#     cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
+#     encryptor = cipher.encryptor()
 
-    # Cifratura
-    encrypted = encryptor.update(padded_value) + encryptor.finalize()
-    return encrypted
+#     # Cifratura
+#     encrypted = encryptor.update(padded_value) + encryptor.finalize()
+#     return encrypted
         
 def read_ERP(input_text):
     template_lettura = PromptTemplate.from_template(
@@ -1162,7 +1161,7 @@ def fn_ricerca_ERP(list_meme):
     str_2 = "Metti ferie per mercoledì prossimo"
     str_3 = "Vado a fumare"
     if str_1 in list_meme and str_2 in list_meme and str_3 in list_meme:
-        print('ciau')
+        #print('ciau')
         im = Image.open(requests.get(url, stream=True).raw)
         plt.figure(figsize=(10,10))
         plt.title("FORZA NAPOLI SEMPRE")
