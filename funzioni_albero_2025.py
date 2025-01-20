@@ -410,18 +410,63 @@ def operazione(modello,metodo,dizionario):
     elif modello == 'account.move':
             return 'Operazione fallita'
     
+    if "partner_ids" in dizionario:
+        lista_ids = []
+        lista_nomi = [nome for nome in dizionario['partner_ids']]
+
+        # Endpoint per Odoo
+        url = f"{odoo_url}/web/dataset/call_kw/res.partner/search_read"
+
+        # Itera sui nomi per cercare gli ID
+        for nome in lista_nomi:
+            payload = {
+                "jsonrpc": "2.0",
+                "params": {
+                    "model": "res.partner",
+                    "method": "search_read",
+                    "args": [],
+                    "kwargs": {
+                        "domain": [["name", "=", nome]],  # Cerca per nome
+                        "fields": ["id"],  # Ottieni solo l'ID
+                        "limit": 1  # Limita il risultato a uno
+                    }
+                }
+            }
+            try:
+                response = session.post(url, json=payload)
+                response.raise_for_status()
+
+                # Decodifica la risposta JSON
+                result = response.json()
+                if result.get("result"):  # Se c'è un risultato valido
+                    partner = result["result"]
+                    if partner:  # Se esistono partner corrispondenti
+                        lista_ids.append(partner[0]["id"])
+                    else:
+                        return f"Nome non trovato: {nome}"
+                else:
+                    return f"Errore nella risposta per il nome {nome}: {result}"
+            except Exception as e:
+                return f"Errore nella richiesta per il nome {nome}: {str(e)}"
+        
+        # Aggiungi l'elenco degli ID partner nel dizionario
+        dizionario["partner_ids"] = [(6, 0, lista_ids)]
+
+    # Endpoint per la creazione del record
     url = f"{odoo_url}/web/dataset/call_kw/{modello}/{metodo}"
-    dizionario[chiave] = uid
+    dizionario[chiave] = uid  # Aggiungi la chiave nel dizionario
+
     payload = {
         "jsonrpc": "2.0",
         "params": {
             "model": modello,
             "method": metodo,
-            "args": [dizionario],
+            "args": [dizionario],  # Passa il dizionario con i dati
             "kwargs": {}
         }
     }
-    # Effettua la richiesta
+
+    # Effettua la richiesta per creare il record
     try:
         response = session.post(url, json=payload)
         response.raise_for_status()
@@ -432,9 +477,9 @@ def operazione(modello,metodo,dizionario):
             return f"Errore durante la creazione del record: {result['error']}"
         else:
             return "Record creato con successo"
-        
     except Exception as e:
         return f'Operazione fallita: {e}'
+
 
 #OPERAZIONI DI CREAZIONE SU ODOO (OK)
 def operazione_ERP(input_text):
@@ -513,6 +558,21 @@ def operazione_ERP(input_text):
             }}
         }}
         
+        Richiesta: "Programma un meeting con il team marketing il 15 dicembre dalle 14:00 alle 15:30 e invita nome come partecipante."
+        Output:
+        {{
+            "modello": "calendar.event",
+            "metodo": "create",
+            "dizionario": {{
+                "name": "Meeting con il team marketing",
+                "start": "2024-12-15 14:00:00",
+                "stop": "2024-12-15 15:30:00",
+                "description": "Discussione sulle strategie di marketing",
+                "allday": false
+                "partner_ids": ["nome"]
+            }}
+        }}
+
         Richiesta: "aggiungi un'ora al progetto X il 15 dicembre"
         Output:
         {{
@@ -1168,7 +1228,7 @@ def fn_ricerca_ERP(list_meme):
         plt.imshow(im)
         plt.show()
 
-
+#print(operazione_ERP("crea un evento per il 21 gennaio con nome prova e invita Paolo de Luise come partecipante"))
 # def fn_ricerca_ERP(list_meme):
 #     str_1 = "Leggimi il foglio ore di questa settimana"
 #     str_2 = "Metti ferie per mercoledì prossimo "
