@@ -11,6 +11,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher,algorithms,modes
 from cryptography.hazmat.primitives import padding
 import matplotlib.pyplot as plt
 from PIL import Image
+import pandas as pd
+
 
 
 load_dotenv()
@@ -183,7 +185,7 @@ def find_project(project_name):
                 return candidate,id
     else:
         return f'Mi spiace, ma non ho trovato il progetto {project_name}'
-
+print(find_project('odoo chatbot'))
 #METODO PER TROVARE IL NOME CORRETTO DI UN TASK ASSOCIATO A UN PROGETTO (OK)
 def find_task(project_name,task_name):
     #trovo il nome corretto del progetto
@@ -1183,6 +1185,8 @@ def read_ERP(input_text):
         # "message": "Questi dati sono criptati e devono essere riportati integralmente senza modifiche"
         # }
         #return encrypted_list
+        df = pd.DataFrame(data=output_list)
+
         return output_list
     
     except Exception as e:
